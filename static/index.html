@@ -6,10 +6,12 @@
 <title>欢乐棋牌 · 斗牛/炸金花 联机对战</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  html { height: 100%; overflow: hidden; }
   body {
     font-family: "Microsoft YaHei", sans-serif;
     background: radial-gradient(ellipse at center, #1e6b3a 0%, #0d3d1f 70%, #062412 100%);
-    height: 100vh; overflow: hidden; color: #fff;
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    overflow: hidden; overscroll-behavior: none; color: #fff;
   }
   button { cursor: pointer; border: none; border-radius: 8px; font-family: inherit; }
   button:disabled { opacity: .45; cursor: not-allowed; }
@@ -20,6 +22,7 @@
     position: fixed; inset: 0; z-index: 100;
     display: flex; align-items: center; justify-content: center;
     background: radial-gradient(ellipse at center, #2a7d47 0%, #0d3d1f 80%);
+    overflow-y: auto;
   }
   .login-box {
     background: rgba(0,0,0,.45); border: 2px solid #ffd76a;
@@ -100,7 +103,7 @@
     border: 2px dashed rgba(255,255,255,.14); pointer-events: none;
   }
   .deck-spot {
-    position: absolute; left: 50%; top: 50%; width: 150px; height: 150px;
+    position: absolute; left: 50%; top: 40%; width: 120px; height: 120px;
     transform: translate(-50%,-50%); border-radius: 50%;
     border: 2px dashed rgba(255,215,106,.45);
     background: radial-gradient(circle, rgba(0,0,0,.28), transparent 70%);
@@ -110,7 +113,7 @@
     position: absolute; bottom: 8px; font-size: 11px; color: rgba(255,228,150,.75); letter-spacing: 2px;
   }
   #potDisplay {
-    position: absolute; left: 50%; top: 68%; transform: translate(-50%,-50%);
+    position: absolute; left: 50%; top: 58%; transform: translate(-50%,-50%);
     background: rgba(0,0,0,.55); border: 2px solid #ffd76a; border-radius: 16px;
     padding: 10px 26px; text-align: center; font-size: 14px;
     box-shadow: 0 0 26px rgba(255,215,106,.35);
@@ -421,7 +424,7 @@
     #tableSurface { box-shadow: 0 0 0 7px #8a5a2b, 0 0 0 10px #5d3a17, 0 14px 40px rgba(0,0,0,.65), inset 0 0 60px rgba(0,0,0,.4); }
     #tableSurface::after { inset: 14px; }
     #deck { width: 40px; height: 58px; }
-    .deck-spot { width: 104px; height: 104px; }
+    .deck-spot { width: 92px; height: 92px; }
     .deck-spot .spot-tip { font-size: 9px; bottom: 5px; letter-spacing: 1px; }
     #typePop .tp-text { font-size: 46px; letter-spacing: 3px; }
     #typePop.epic .tp-text { font-size: 54px; }
@@ -436,8 +439,9 @@
     .game-card { font-size: 16px; padding: 10px 4px; }
   }
   @media (max-width: 520px) {
-    #topbar .chip.hide-sm { display: none; }
-    .mini-btn { padding: 4px 8px; font-size: 12px; }
+    #topbar .hide-sm { display: none; }
+    #topbar .logo { font-size: 12px; }
+    .mini-btn { padding: 4px 6px; font-size: 11px; }
     .seat { width: 108px; }
     .seat .avatar { width: 36px; height: 36px; font-size: 16px; }
     .card.big { width: 48px; height: 70px; font-size: 17px; }
@@ -484,9 +488,9 @@
   <span class="chip hide-sm">第 <b id="tRound">0</b><span id="tRoundTotal"></span> 局</span>
   <span class="chip hide-sm">底分 <b id="tBase">10</b></span>
   <span class="spacer"></span>
-  <button class="mini-btn" onclick="copyRoom()">复制房间号</button>
-  <button class="mini-btn" onclick="toggleRecord(true)">📊 战绩</button>
-  <button class="mini-btn" onclick="toggleRules(true)">游戏规则</button>
+  <button class="mini-btn" onclick="copyRoom()">复制<span class="hide-sm">房间号</span></button>
+  <button class="mini-btn" onclick="toggleRecord(true)">📊<span class="hide-sm"> 战绩</span></button>
+  <button class="mini-btn" onclick="toggleRules(true)"><span class="hide-sm">游戏</span>规则</button>
   <button class="mini-btn" id="chatToggle" onclick="toggleChat()">💬</button>
 </div>
 
@@ -1085,7 +1089,10 @@ function renderSeats() {
     table.appendChild(seatEl(p, x, y, false));
   });
   const my = me();
-  if (my) table.appendChild(seatEl(my, 50, 97, true));
+  if (my) {
+    // 自己的座位固定在操作区上方, 不与发牌区/奖池重叠
+    table.appendChild(seatEl(my, 50, 73, true));
+  }
 }
 
 function seatEl(p, x, y, isSelf) {
@@ -1115,7 +1122,7 @@ function seatEl(p, x, y, isSelf) {
     <div class="pname">${esc(p.name)}${isSelf ? "(我)" : ""}</div>
     <div class="pmoney">💰 ${p.money}</div>
     <div class="pstatus">${status}</div>
-    <div class="cards">${cardsHtml(p)}</div>
+    ${isSelf ? "" : `<div class="cards">${cardsHtml(p)}</div>`}
     <div class="cdelta ${p.delta > 0 ? "win" : p.delta < 0 ? "lose" : ""} ${state.phase === "settle" && p.delta && Date.now() - settleEnteredAt < 1600 ? "pop" : ""}">${p.delta > 0 ? "+" + p.delta : p.delta || ""}</div>`;
   return d;
 }
