@@ -64,6 +64,14 @@
   .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 5px 0 #a97708, 0 8px 20px rgba(245,180,35,.7); }
   .btn-gold:active { transform: translateY(2px); box-shadow: 0 1px 0 #a97708; }
   .login-box .row { margin-top: 14px; display: flex; gap: 8px; justify-content: center; }
+  .round-select { display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 12px; }
+  .round-select .rs-label { font-size: 13px; color: #bfe8cd; }
+  .rs-opt {
+    padding: 4px 14px; border-radius: 14px; cursor: pointer; font-size: 13px;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); transition: all .2s;
+  }
+  .rs-opt:hover { background: rgba(255,215,106,.15); }
+  .rs-opt.selected { border-color: #ffd76a; background: rgba(255,215,106,.22); color: #ffe9ad; }
   #loginErr { color: #ff9c9c; font-size: 13px; min-height: 18px; margin-top: 10px; }
 
   /* ---------- 顶栏 ---------- */
@@ -334,6 +342,15 @@
   .rules-box h2 { color: #b47b00; margin-bottom: 8px; }
   .rules-box td { padding: 2px 14px 2px 0; }
 
+  /* ---------- 战绩弹层 ---------- */
+  #recordMask { position: fixed; inset: 0; z-index: 68; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+  .record-box { max-height: 82vh; overflow-y: auto; min-width: 440px; }
+  .rec-sum { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 15px; border-bottom: 1px dashed rgba(255,255,255,.15); }
+  .rec-sum .rk { width: 30px; } .rec-sum .nm { flex: 1; }
+  .rec-round { margin-top: 10px; font-size: 13px; color: #ffd76a; text-align: center; }
+  .rec-line { display: flex; gap: 8px; font-size: 12.5px; color: #cfe9d6; padding: 2px 0 2px 12px; }
+  .rec-line .dl { margin-left: auto; font-weight: bold; }
+
   #toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.8); padding: 10px 22px; border-radius: 8px; z-index: 90; display: none; font-size: 15px; }
 
   /* ---------- 手部动作层 ---------- */
@@ -443,6 +460,13 @@
       <div class="game-card selected" id="gcDouniu" onclick="pickGame('douniu')">🐂 欢乐斗牛<span>5张牌 · 抢庄对决</span></div>
       <div class="game-card" id="gcZjh" onclick="pickGame('zjh')">🃏 炸金花<span>3张牌 · 看牌跟注比牌</span></div>
     </div>
+    <div class="round-select">
+      <span class="rs-label">本场把数:</span>
+      <div class="rs-opt selected" onclick="pickRounds(0)">不限</div>
+      <div class="rs-opt" onclick="pickRounds(5)">5把</div>
+      <div class="rs-opt" onclick="pickRounds(10)">10把</div>
+      <div class="rs-opt" onclick="pickRounds(20)">20把</div>
+    </div>
     <input id="nick" maxlength="8" placeholder="输入你的昵称"><br>
     <button class="btn-gold" onclick="doCreate()">创建房间</button>
     <div class="row">
@@ -457,10 +481,11 @@
 <div id="topbar" style="display:none">
   <span class="logo" id="tLogo">🐂 欢乐斗牛</span>
   <span class="chip">房间号 <b id="tRoom">----</b></span>
-  <span class="chip hide-sm">第 <b id="tRound">0</b> 局</span>
+  <span class="chip hide-sm">第 <b id="tRound">0</b><span id="tRoundTotal"></span> 局</span>
   <span class="chip hide-sm">底分 <b id="tBase">10</b></span>
   <span class="spacer"></span>
   <button class="mini-btn" onclick="copyRoom()">复制房间号</button>
+  <button class="mini-btn" onclick="toggleRecord(true)">📊 战绩</button>
   <button class="mini-btn" onclick="toggleRules(true)">游戏规则</button>
   <button class="mini-btn" id="chatToggle" onclick="toggleChat()">💬</button>
 </div>
@@ -499,6 +524,14 @@
   <h2 id="settleTitle">📊 本局结算</h2>
   <div id="settleRows"></div>
   <div id="settleBtns" style="text-align:center;margin-top:14px;min-height:44px"></div>
+</div></div>
+
+<!-- 战绩弹层 -->
+<div id="recordMask"><div class="settle-box record-box">
+  <h2>📊 战绩明细</h2>
+  <div id="recordSummary"></div>
+  <div id="recordList"></div>
+  <div style="text-align:center;margin-top:14px"><button class="btn-gold" onclick="toggleRecord(false)">关闭</button></div>
 </div></div>
 
 <!-- 规则弹层 -->
@@ -556,7 +589,7 @@ const RANK = {1:"A", 11:"J", 12:"Q", 13:"K"};
 const DN_SPECIAL = ["炸弹","四花牛","五花牛","五小牛"];   // 斗牛顶级牌型
 const ZJH_EPIC = ["豹子","顺金"];                          // 炸金花顶级牌型
 const ZJH_EMOJI = {"豹子":"💥","顺金":"🌈","金花":"🌸","顺子":"🪜","对子":"🎴","单张":""};
-let ws = null, state = null, myId = null, pickedGame = "douniu";
+let ws = null, state = null, myId = null, pickedGame = "douniu", pickedRounds = 0;
 
 /* ================ 特效引擎 ================ */
 const FX = {
@@ -927,6 +960,12 @@ function handleState(m) {
     else if (mine && mine.delta < 0) screenShake();
   }
 
+  // 全场结束: 总记录弹出 + 赢家特效
+  if (prev && m.phase === "finished" && prev.phase !== "finished") {
+    const mine = sessionStats().find(s => s.id === myId);
+    if (mine && mine.net > 0) { FX.coins(220); screenFlash("gold"); }
+  }
+
   render();
 
   // 刚亮牌的玩家: 座位卡片翻牌动画
@@ -960,10 +999,16 @@ function pickGame(g) {
   document.getElementById("gcDouniu").classList.toggle("selected", g === "douniu");
   document.getElementById("gcZjh").classList.toggle("selected", g === "zjh");
 }
+function pickRounds(n) {
+  pickedRounds = n;
+  document.querySelectorAll(".rs-opt").forEach(el => {
+    el.classList.toggle("selected", el.textContent.includes(n === 0 ? "不限" : n + "把"));
+  });
+}
 function doCreate() {
   const name = document.getElementById("nick").value.trim();
   if (!name) return loginErr("请先输入昵称");
-  send({ type: "create", name, game: pickedGame });
+  send({ type: "create", name, game: pickedGame, rounds: pickedRounds });
   enterGame();
 }
 function doJoin() {
@@ -990,6 +1035,7 @@ function render() {
   document.getElementById("tLogo").textContent = isZjh() ? "🃏 炸金花" : "🐂 欢乐斗牛";
   document.getElementById("tRoom").textContent = state.room;
   document.getElementById("tRound").textContent = state.roundNo;
+  document.getElementById("tRoundTotal").textContent = state.totalRounds ? "/" + state.totalRounds : "";
   document.getElementById("tBase").textContent = state.base;
   document.getElementById("rulesDouniu").style.display = isZjh() ? "none" : "";
   document.getElementById("rulesZjh").style.display = isZjh() ? "" : "none";
@@ -1223,6 +1269,22 @@ function renderCountdown() {
 
 function renderSettle() {
   const mask = document.getElementById("settleMask");
+  if (state.phase === "finished") {
+    mask.style.display = "flex";
+    document.getElementById("settleTitle").textContent = `🏁 全场结束 · 共 ${state.history.length} 把 · 总记录`;
+    const stats = sessionStats();
+    const medals = ["🥇", "🥈", "", "🏅", "🏅"];
+    document.getElementById("settleRows").innerHTML = stats.map((s, i) => `
+      <div class="settle-row" style="animation-delay:${i * 0.12}s">
+        <span class="nm">${medals[i] || ""} ${esc(s.name)}</span>
+        <span class="ct">胜${s.wins}局/共${s.rounds}把</span>
+        <span class="dl ${s.net > 0 ? "win" : s.net < 0 ? "lose" : ""}">${s.net > 0 ? "+" + s.net : s.net}</span>
+      </div>`).join("");
+    document.getElementById("settleBtns").innerHTML =
+      `<button class="btn-gold" onclick="send({type:'restart'})">🔄 再来一场</button>
+       <button class="mini-btn" style="margin-left:10px" onclick="toggleRecord(true)">📊 每把明细</button>`;
+    return;
+  }
   if (state.phase === "settle" && state.results.length) {
     mask.style.display = "flex";
     document.getElementById("settleTitle").textContent = isZjh() ? "🏆 本局结算 · 赢家通吃奖池" : "📊 本局结算";
@@ -1242,6 +1304,36 @@ function renderSettle() {
       ? `<span style="opacity:.75">✅ 已确认, 等待其他玩家…</span>`
       : `<button class="btn-gold" onclick="send({type:'next'})">🚀 开始下一局</button>`;
   } else mask.style.display = "none";
+}
+
+/* ================ 战绩统计 ================ */
+function sessionStats() {
+  const map = {};
+  (state.history || []).forEach(h => h.rows.forEach(r => {
+    const s = map[r.id] || (map[r.id] = { id: r.id, name: r.name, net: 0, wins: 0, rounds: 0, best: 0 });
+    s.net += r.delta; s.rounds++;
+    if (r.delta > 0) { s.wins++; s.best = Math.max(s.best, r.delta); }
+  }));
+  return Object.values(map).sort((a, b) => b.net - a.net);
+}
+function toggleRecord(show) {
+  document.getElementById("recordMask").style.display = show ? "flex" : "none";
+  if (show && state) renderRecord();
+}
+function renderRecord() {
+  const stats = sessionStats();
+  const medals = ["🥇", "", "🥉", "🏅", "🏅"];
+  document.getElementById("recordSummary").innerHTML = stats.length ? stats.map((s, i) => `
+    <div class="rec-sum">
+      <span class="rk">${medals[i] || ""}</span>
+      <span class="nm">${esc(s.name)}</span>
+      <span style="opacity:.8;font-size:13px">胜${s.wins}局/共${s.rounds}把${s.best ? " · 单把最多+" + s.best : ""}</span>
+      <span style="font-weight:bold;font-size:17px;color:${s.net > 0 ? "#ffd76a" : s.net < 0 ? "#ff8a8a" : "#fff"}">${s.net > 0 ? "+" + s.net : s.net}</span>
+    </div>`).join("") : '<div style="opacity:.7">暂无记录, 开局后自动记录每把输赢</div>';
+  document.getElementById("recordList").innerHTML = (state.history || []).slice().reverse().map(h =>
+    `<div class="rec-round">—— 第 ${h.round} 把 ——</div>` +
+    h.rows.map(r => `<div class="rec-line"><span>${r.banker ? "👑" : ""}${esc(r.name)} · ${r.ctype}</span><span class="dl" style="color:${r.delta > 0 ? "#ffd76a" : r.delta < 0 ? "#ff8a8a" : "#aaa"}">${r.delta > 0 ? "+" + r.delta : r.delta}</span></div>`).join("")
+  ).join("");
 }
 
 /* ================ 聊天 / 其他 ================ */

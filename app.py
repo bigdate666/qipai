@@ -56,6 +56,10 @@ async def ws_endpoint(ws: WebSocket):
                 code = make_room_code()
                 room_cls = gc.ZhajinhuaRoom if game == "zjh" else gc.DouniuRoom
                 room = room_cls(code)
+                try:
+                    room.total_rounds = max(0, min(100, int(msg.get("rounds") or 0)))
+                except (TypeError, ValueError):
+                    room.total_rounds = 0
                 ROOMS[code] = room
                 room.players.append(player)
                 player.room = room
@@ -90,6 +94,8 @@ async def ws_endpoint(ws: WebSocket):
                 player.room.on_action(player, msg.get("action", ""), msg.get("target"))
             elif t == "next":
                 player.room.on_next(player)
+            elif t == "restart":
+                player.room.on_restart(player)
             elif t == "relief":
                 player.room.on_relief(player)
             elif t == "sitout":

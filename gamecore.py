@@ -151,6 +151,8 @@ class Room:
         self.last_results = []
         self.stake = BASE_SCORE
         self.turn = None
+        self.total_rounds = 0      # 本场设定把数, 0=不限
+        self.history = []          # 每把输赢记录 [{round, rows:[...]}]
 
     # ---------------- 基础工具
     def active(self):
@@ -202,6 +204,8 @@ class Room:
             "players": [],
             "you": p.id,
             "results": self.last_results,
+            "totalRounds": self.total_rounds,
+            "history": self.history,
         }
 
     def new_deck(self):
@@ -230,7 +234,39 @@ class Room:
         seated = self.seated()
         if seated and all(q.confirmed for q in seated):
             self.cancel_timer()
-            asyncio.create_task(self.next_round())
+            asyncio.create_task(self.finish_or_next())
+
+    async def finish_or_next(self):
+        """达到设定把数 → 进入 finished(总记录); 否则开下一局"""
+        if self.total_rounds and self.round_no >= self.total_rounds:
+            self.cancel_timer()
+            self.phase = "finished"
+            self.turn = None
+            self.countdown = 0
+            self.broadcast()
+        else:
+            await self.next_round()
+
+    def on_restart(self, p):
+        """全场结束后: 再来一场(保留金币, 清空把数记录)"""
+        if self.phase != "finished":
+            return
+        self.cancel_timer()
+        self.round_no = 0
+        self.history = []
+        self.last_results = []
+        self.stake = BASE_SCORE
+        self.turn = None
+        self.phase = "waiting"
+        for q in self.players:
+            q.reset_round()
+        self.sys_msg("新一场开始, 请大家准备!")
+        self.broadcast()
+
+    def record_round(self):
+        self.history.append({"round": self.round_no, "rows": self.last_results})
+        if len(self.history) > 200:
+            self.history.pop(0)
 
     async def next_round(self):
         self.last_results = []
@@ -468,9 +504,10 @@ class DouniuRoom(Room):
             "ctype": "弃牌" if (p.folded and p is not b) else p.ctype["name"],
             "delta": p.delta, "win": p.delta > 0, "banker": p is b,
         } for p in act]
+        self.record_round()
         self.phase = "settle"
         self.broadcast()
-        self.set_timer(SETTLE_TIME, self.next_round)
+        self.set_timer(SETTLE_TIME, self.finish_or_next)
 
     # ---------------- 玩家离开
     def on_leave_round(self, p):
@@ -744,9 +781,10 @@ class ZhajinhuaRoom(Room):
             "ctype": "弃牌" if p.folded else p.ctype["name"],
             "delta": p.delta, "win": not p.folded, "banker": False,
         } for p in act]
+        self.record_round()
         self.phase = "settle"
         self.broadcast()
-        self.set_timer(SETTLE_TIME, self.next_round)
+        self.set_timer(SETTLE_TIME, self.finish_or_next)
 
     async def next_round(self):
         self.last_results = []
