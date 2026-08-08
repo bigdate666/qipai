@@ -111,4 +111,12 @@ async def ws_endpoint(ws: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 7860)))
+    # Hugging Face Spaces 免费档: Docker SDK 已收费, 改用 Gradio SDK 外壳挂载本服务
+    try:
+        import gradio as gr
+        with gr.Blocks() as demo:
+            gr.Markdown("🎴 棋牌服务器运行中, 请访问根路径 / 进入游戏")
+        mounted = gr.mount_gradio_app(app, demo, path="/hf_admin")
+    except Exception:
+        mounted = app
+    uvicorn.run(mounted, host="0.0.0.0", port=int(os.environ.get("PORT", 7860)))
