@@ -280,6 +280,7 @@
     font-size: 22px; font-weight: bold; color: #ffd76a; margin-bottom: 6px; min-height: 28px;
     text-shadow: 0 0 14px rgba(255,200,60,.8), 0 2px 4px #000;
   }
+  #myTypeTag:empty { display: none; }
   /* 斗地主: 我打出的牌 / 底牌 */
   #myPlay { display: flex; gap: 4px; justify-content: center; align-items: center; min-height: 0; margin-bottom: 4px; perspective: 700px; }
   #myPlay .card { width: 40px; height: 58px; font-size: 14px; }
@@ -518,15 +519,15 @@
     #mycards { gap: 4px; min-height: 64px; margin-bottom: 4px; }
     #mycards.ddz { gap: 0; }
     #mycards.ddz .card.big { margin-left: -28px; }
-    #myarea { height: 126px; padding-bottom: 6px; }
+    #myarea { height: 150px; padding-bottom: 6px; }
     #myTypeTag { font-size: 12px; min-height: 16px; margin-bottom: 2px; }
     #myPlay .card { width: 26px; height: 38px; font-size: 10px; }
     #myPlay .card .suit { font-size: 11px; }
     #actions { gap: 6px; min-height: 30px; }
     #actions .btn-act { font-size: 12px; padding: 6px 10px; }
-    #countdown { font-size: 10px; padding: 3px 12px; top: 5%; }
+    #countdown { font-size: 10px; padding: 3px 12px; top: 10%; }
     #countdown b { font-size: 13px; }
-    body.ddz-game #countdown { top: 16%; }
+    body.ddz-game #countdown { top: 22%; }
     .deck-spot { width: 64px; height: 64px; top: 34%; }
     #deck { width: 28px; height: 42px; }
     #potDisplay { padding: 4px 12px; font-size: 10px; top: 52%; }
