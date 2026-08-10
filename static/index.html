@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>欢乐棋牌 · 斗牛/炸金花/斗地主 联机对战</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
@@ -251,10 +251,10 @@
 
   /* ---------- 我的区域 ---------- */
   #myarea {
-    position: absolute; left: 0; right: 260px; bottom: 0; height: 230px;
+    position: absolute; left: 0; right: 260px; bottom: 0; min-height: 230px;
     background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.6));
     display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-    padding-bottom: 12px; transition: right .25s ease;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transition: right .25s ease;
   }
   #mycards { display: flex; gap: 10px; margin-bottom: 10px; min-height: 138px; perspective: 900px; }
   #actions { display: flex; gap: 10px; align-items: center; min-height: 50px; flex-wrap: wrap; justify-content: center; }
@@ -461,7 +461,7 @@
     #mycards { gap: 6px; min-height: 82px; margin-bottom: 6px; }
     #mycards.ddz { gap: 0; }
     #mycards.ddz .card.big { margin-left: -34px; }
-    #myarea { height: 168px; padding-bottom: 8px; }
+    #myarea { min-height: 168px; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
     #myTypeTag { font-size: 15px; min-height: 20px; margin-bottom: 3px; }
     #actions { gap: 6px; min-height: 40px; }
     #actions .btn-act { font-size: 13px; padding: 8px 12px; }
@@ -498,7 +498,7 @@
     .card.big .suit { font-size: 20px; }
     #mycards { min-height: 70px; }
     #mycards.ddz .card.big { margin-left: -32px; }
-    #myarea { height: 150px; }
+    #myarea { min-height: 150px; }
   }
   /* ---------- 手机横屏适配 ---------- */
   @media (orientation: landscape) and (max-height: 520px) {
@@ -528,7 +528,7 @@
     #mycards { gap: 4px; min-height: 64px; margin-bottom: 4px; }
     #mycards.ddz { gap: 0; }
     #mycards.ddz .card.big { margin-left: -28px; }
-    #myarea { height: 150px; padding-bottom: 6px; }
+    #myarea { min-height: 150px; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
     #myTypeTag { font-size: 12px; min-height: 16px; margin-bottom: 2px; }
     #myPlay .card { width: 26px; height: 38px; font-size: 10px; }
     #myPlay .card .suit { font-size: 11px; }
@@ -689,7 +689,7 @@
       <b>跟注</b>: 盲跟 = 当前底注, 看牌后 = 底注×2;<br>
       <b>加注</b>: 底注翻倍(最高底分×8), 所有人需重新跟平;<br>
       <b>比牌</b>: 付一次跟注费与任意对手比大小, 输家淘汰(平局算比牌者输);<br>
-      <b>弃牌</b>: 放弃已下筹码。超时自动跟注(跟不起则自动弃牌)。<br>
+      <b>弃牌</b>: 放弃已下筹码。完全手动控制, 无倒计时。<br>
       最后剩下的玩家赢得全部奖池。破产后可领取 1000 救济金。
     </div>
     <div id="rulesDdz" style="display:none">
@@ -1418,11 +1418,10 @@ function renderMyArea() {
       html += `<button class="btn-act" onclick="send({type:'action',action:'call'})">跟注 ${Math.min(myCost, my.money)}</button>`;
       const raiseCost = (my.seen ? 2 : 1) * stake * 2;
       html += `<button class="btn-act blue" ${stake < cap && my.money >= raiseCost ? "" : "disabled"} onclick="send({type:'action',action:'raise'})">加注 ${raiseCost}</button>`;
-      // 比牌目标
+      // 比牌目标: 按钮直接显示"比牌"文字
       const targets = state.players.filter(p => p.id !== my.id && p.inRound && !p.folded);
       if (targets.length) {
-        html += `<span style="opacity:.85">比牌(付${myCost}):</span>` +
-          targets.map(t => `<button class="btn-act red" onclick="send({type:'action',action:'compare',target:${t.id}})">⚔ ${esc(t.name)}</button>`).join("");
+        html += targets.map(t => `<button class="btn-act red" onclick="send({type:'action',action:'compare',target:${t.id}})">比牌·${esc(t.name)}</button>`).join("");
       }
       html += `<button class="btn-act gray" onclick="send({type:'action',action:'fold'})">弃牌</button>`;
       actions.innerHTML = html;
@@ -1568,6 +1567,8 @@ function applyHint(cs) {
 
 function renderCountdown() {
   const box = document.getElementById("countdown");
+  // 炸金花完全手动控制, 不显示倒计时
+  if (state && state.game === "zjh") { box.style.display = "none"; return; }
   const texts = { grab: "抢庄倒计时", bet: "行动倒计时", reveal: "亮牌", settle: "自动开始下一局", call: "叫分倒计时", double: "加倍倒计时", play: "出牌倒计时" };
   if (state && state.countdown > 0 && texts[state.phase]) {
     box.style.display = "";

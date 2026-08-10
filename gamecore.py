@@ -630,20 +630,10 @@ class ZhajinhuaRoom(Room):
         self.phase = "bet"
         self.sys_msg(f"第 {self.round_no} 局开始! 每人底注 {BASE_SCORE}, 请行动")
         self.broadcast()
-        self.set_timer(TURN_TIME, self.turn_timeout)
 
     # ---------------- 行动 ----------------
     def call_cost(self, p):
         return self.stake * (2 if p.seen else 1)
-
-    async def turn_timeout(self):
-        p = self.turn
-        if self.phase != "bet" or p is None or p.folded or p not in self.players:
-            return
-        if p.money >= self.call_cost(p):
-            self.after_call(p, silent=False, auto=True)
-        else:
-            self.after_fold(p, auto=True)
 
     def after_call(self, p, silent=False, auto=False):
         cost = min(self.call_cost(p), p.money)
@@ -694,7 +684,6 @@ class ZhajinhuaRoom(Room):
             self.end_hand()
             return
         self.turn = nxt
-        self.set_timer(TURN_TIME, self.turn_timeout)
         self.broadcast()
 
     def on_action(self, p, action, target=None):
@@ -788,7 +777,6 @@ class ZhajinhuaRoom(Room):
         self.record_round()
         self.phase = "settle"
         self.broadcast()
-        self.set_timer(SETTLE_TIME, self.finish_or_next)
 
     async def next_round(self):
         self.last_results = []
