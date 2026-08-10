@@ -211,10 +211,14 @@
   .card.big .corner { position: absolute; top: 6px; left: 8px; font-size: 15px; line-height: 1; text-align: center; }
   .card.big { position: relative; }
   .card.big.back.clickable { cursor: pointer; animation: backBreath 1.4s ease-in-out infinite alternate; }
-  /* 大小王 */
-  .card.jk span { writing-mode: vertical-rl; font-size: 15px; letter-spacing: 3px; font-weight: 900; color: #444; }
-  .card.jk.red span { color: #d32f2f; }
-  .card.big.jk span { font-size: 26px; letter-spacing: 6px; }
+  /* 大小王: 真实纸牌样式 —— 左上角标识 + 中间小丑图案 */
+  .card.jk { position: relative; }
+  .card.jk .jk-corner { position: absolute; top: 4px; left: 5px; font-size: 13px; line-height: 1; color: #333; text-shadow: none; }
+  .card.jk .jk-face { font-size: 27px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+  .card.jk.red .jk-corner { color: #d32f2f; }
+  .card.jk:not(.red) .jk-face { filter: hue-rotate(190deg) saturate(1.15) drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+  .card.big.jk .jk-corner { top: 6px; left: 7px; font-size: 16px; }
+  .card.big.jk .jk-face { font-size: 44px; }
   /* 斗地主: 选中的手牌 */
   .card.big.sel { transform: translateY(-18px); z-index: 6; box-shadow: 0 0 0 3px #ffd76a, 0 0 16px rgba(255,200,60,.8), 0 8px 18px rgba(0,0,0,.6); }
   /* 斗地主: 手牌叠排 */
@@ -449,6 +453,8 @@
     .card { width: 34px; height: 50px; font-size: 13px; border-radius: 5px; }
     .card .suit { font-size: 14px; }
     .card.big { width: 56px; height: 82px; font-size: 20px; border-radius: 8px; }
+    .card.big.jk .jk-face { font-size: 32px; }
+    .card.big.jk .jk-corner { font-size: 13px; }
     .card.big .suit { font-size: 24px; }
     .card.big .corner { font-size: 10px; top: 4px; left: 5px; }
     .card.back.mini { width: 28px; height: 40px; }
@@ -487,6 +493,8 @@
     .seat { width: 108px; }
     .seat .avatar { width: 36px; height: 36px; font-size: 16px; }
     .card.big { width: 48px; height: 70px; font-size: 17px; }
+    .card.big.jk .jk-face { font-size: 26px; }
+    .card.big.jk .jk-corner { font-size: 12px; top: 4px; left: 5px; }
     .card.big .suit { font-size: 20px; }
     #mycards { min-height: 70px; }
     #mycards.ddz .card.big { margin-left: -32px; }
@@ -524,6 +532,10 @@
     #myTypeTag { font-size: 12px; min-height: 16px; margin-bottom: 2px; }
     #myPlay .card { width: 26px; height: 38px; font-size: 10px; }
     #myPlay .card .suit { font-size: 11px; }
+    .card.jk .jk-face { font-size: 14px; }
+    .card.jk .jk-corner { font-size: 8px; top: 2px; left: 3px; }
+    .card.big.jk .jk-face { font-size: 26px; }
+    .card.big.jk .jk-corner { font-size: 12px; top: 4px; left: 5px; }
     #actions { gap: 6px; min-height: 30px; }
     #actions .btn-act { font-size: 12px; padding: 6px 10px; }
     #countdown { font-size: 10px; padding: 3px 12px; top: 10%; }
@@ -1318,7 +1330,7 @@ function backCards(n) { return Array(n).fill('<div class="card back"></div>').jo
 function cardHtml(c, isCombo, big, special) {
   const [r, s] = c;
   if (r === 16 || r === 17) {
-    return `<div class="card ${big ? "big" : ""} jk ${r === 17 ? "red" : ""} ${isCombo ? "combo" : ""}"><span>${r === 17 ? "大王" : "小王"}</span></div>`;
+    return `<div class="card ${big ? "big" : ""} jk ${r === 17 ? "red" : ""} ${isCombo ? "combo" : ""}"><span class="jk-corner">${r === 17 ? "★" : "☆"}</span><span class="jk-face">🤡</span></div>`;
   }
   const corner = big ? `<div class="corner">${RANK[r] || r}<br>${SUITS[s]}</div>` : "";
   return `<div class="card ${big ? "big" : ""} ${s===1||s===3 ? "red" : ""} ${isCombo ? "combo" : ""} ${special ? "special-card" : ""}">
