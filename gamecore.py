@@ -17,8 +17,12 @@ REVEAL_TIME = 4        # 亮牌展示时间
 SETTLE_TIME = 20       # 结算展示时间(可手动提前开始下一局)
 MAX_STAKE_MULT = 8     # 单注上限(底分的倍数)
 
-GAMES = ("douniu", "zjh")
-GAME_NAMES = {"douniu": "欢乐斗牛", "zjh": "炸金花"}
+GAMES = ("douniu", "zjh", "ddz")
+GAME_NAMES = {"douniu": "欢乐斗牛", "zjh": "炸金花", "ddz": "斗地主"}
+
+DDZ_CALL_TIME = 15     # 叫分倒计时
+DDZ_DOUBLE_TIME = 10   # 加倍倒计时
+DDZ_TURN_TIME = 20     # 出牌倒计时
 
 
 # ================================================================ 牌型计算
@@ -842,3 +846,592 @@ class ZhajinhuaRoom(Room):
                 self.broadcast()
         else:
             self.broadcast()
+
+
+# ================================================================ 斗地主
+class DdzRoom(Room):
+    game = "ddz"
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.landlord = None
+        self.top_cards = []
+        self.call_order = []
+        self.call_vals = {}
+        self.call_max = 0
+        self.doubled = {}
+        self.order = []
+        self.last_play = None      # {pid, cards, type}
+        self.pass_cnt = 0
+        self.play_cnt = {}
+        self.bomb_cnt = 0
+        self.base_mult = 1
+        self.played = {}           # pid -> 最近一次出的牌
+        self.passed = {}           # pid -> 是否刚说不要
+        self.spring = False
+        self.settle_mult = 1
+
+    # ---------------- 状态 ----------------
+    def state_for(self, p):
+        st = self.base_state(p)
+        st["landlordId"] = self.landlord.id if self.landlord else None
+        st["topCards"] = self.top_cards if self.phase in ("double", "play", "settle") else []
+        st["lastPlay"] = self.last_play
+        st["played"] = {str(k): v for k, v in self.played.items()}
+        st["passed"] = {str(k): v for k, v in self.passed.items()}
+        st["baseMult"] = self.base_mult
+        st["bombCnt"] = self.bomb_cnt
+        st["spring"] = self.spring
+        st["settleMult"] = self.settle_mult
+        st["callMax"] = self.call_max
+        for q in self.players:
+            info = {
+                "id": q.id, "name": q.name, "money": q.money,
+                "ready": q.ready, "playing": q.playing,
+                "inRound": q.in_round, "grab": None,
+                "contrib": 0, "folded": False,
+                "confirmed": q.confirmed, "revealed": q.revealed,
+                "isBanker": self.landlord is q, "delta": q.delta,
+                "cards": [], "ctype": None,
+                "cardCount": len(q.cards),
+                "callVal": self.call_vals.get(q.id),
+                "doubled": self.doubled.get(q.id),
+            }
+            if q is p:
+                info["cards"] = q.cards
+            elif q.revealed and self.phase == "settle":
+                info["cards"] = q.cards
+            st["players"].append(info)
+        return st
+
+    # ---------------- 开局 ----------------
+    async def begin(self, players):
+        self.cancel_timer()
+        candidates = [q for q in players if q.money >= BASE_SCORE]
+        if len(candidates) < 3:
+            self.sys_msg("斗地主需要 3 名玩家, 请等待好友加入")
+            self.abort_round()
+            return
+        act = candidates[:3]
+        self.round_no += 1
+        for q in self.players:
+            q.reset_round()
+        for q in act:
+            q.in_round = True
+            q.money_start = q.money
+        self._deal(act)
+        k = (self.round_no - 1) % 3
+        self.call_order = act[k:] + act[:k]
+        self.turn = self.call_order[0]
+        self.phase = "call"
+        self.sys_msg(f"第 {self.round_no} 局开始! 请 {self.turn.name} 先叫分")
+        self.broadcast()
+        self.set_timer(DDZ_CALL_TIME, self.call_timeout)
+
+    def _deal(self, act):
+        deck = ddz_deck()
+        for i, p in enumerate(act):
+            p.cards = ddz_sort(deck[i * 17:(i + 1) * 17])
+        self.top_cards = ddz_sort(deck[51:])
+        self.landlord = None
+        self.last_play = None
+        self.pass_cnt = 0
+        self.bomb_cnt = 0
+        self.base_mult = 1
+        self.spring = False
+        self.play_cnt = {p.id: 0 for p in act}
+        self.doubled = {}
+        self.call_vals = {}
+        self.call_max = 0
+        self.played = {}
+        self.passed = {}
+
+    async def redeal(self):
+        """无人叫分 → 重新发牌(不计局数)"""
+        act = self.active()
+        self._deal(act)
+        random.shuffle(act)
+        self.call_order = act
+        self.turn = act[0]
+        self.phase = "call"
+        self.broadcast()
+        self.set_timer(DDZ_CALL_TIME, self.call_timeout)
+
+    # ---------------- 叫分 ----------------
+    async def call_timeout(self):
+        p = self.turn
+        if self.phase != "call" or p is None or p not in self.players:
+            return
+        self.sys_msg(f"{p.name} 超时未叫, 视为不叫")
+        self._after_call(p, 0)
+
+    def on_call(self, p, v):
+        if self.phase != "call" or self.turn is not p or p.id in self.call_vals:
+            return
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            v = 0
+        v = v if v in (1, 2, 3) and v > self.call_max else 0
+        self._after_call(p, v)
+
+    def _after_call(self, p, v):
+        self.call_vals[p.id] = v
+        self.call_max = max(self.call_max, v)
+        self.broadcast()
+        if v == 3 or all(q.id in self.call_vals for q in self.call_order):
+            self.cancel_timer()
+            self.end_call()
+            return
+        i = self.call_order.index(p)
+        self.turn = self.call_order[(i + 1) % len(self.call_order)]
+        self.set_timer(DDZ_CALL_TIME, self.call_timeout)
+
+    def end_call(self):
+        if self.call_max == 0:
+            self.sys_msg("无人叫地主, 重新发牌")
+            asyncio.create_task(self.redeal())
+            return
+        self.landlord = next(q for q in self.call_order
+                             if self.call_vals.get(q.id) == self.call_max)
+        self.base_mult = self.call_max
+        self.landlord.cards = ddz_sort(self.landlord.cards + self.top_cards)
+        self.phase = "double"
+        self.turn = None
+        self.doubled = {}
+        self.sys_msg(f"👑 {self.landlord.name} 成为地主! 底分倍数 ×{self.base_mult}, 农民请选择是否加倍")
+        self.broadcast()
+        self.set_timer(DDZ_DOUBLE_TIME, self.double_timeout)
+
+    # ---------------- 加倍 ----------------
+    async def double_timeout(self):
+        for q in self.active():
+            if q is not self.landlord and q.id not in self.doubled:
+                self.doubled[q.id] = False
+        self.start_play()
+
+    def on_double(self, p, v):
+        if self.phase != "double" or not p.in_round or p is self.landlord:
+            return
+        if p.id in self.doubled:
+            return
+        self.doubled[p.id] = bool(v)
+        self.sys_msg(f"{p.name} 选择{'加倍' if v else '不加倍'}")
+        self.broadcast()
+        farmers = [q for q in self.active() if q is not self.landlord]
+        if all(q.id in self.doubled for q in farmers):
+            self.cancel_timer()
+            self.start_play()
+
+    # ---------------- 出牌 ----------------
+    def start_play(self):
+        self.cancel_timer()
+        self.phase = "play"
+        act = self.active()
+        i = act.index(self.landlord)
+        self.order = act[i:] + act[:i]
+        self.turn = self.landlord
+        self.last_play = None
+        self.pass_cnt = 0
+        self.broadcast()
+        self.set_timer(DDZ_TURN_TIME, self.play_timeout)
+
+    async def play_timeout(self):
+        p = self.turn
+        if self.phase != "play" or p is None or p not in self.players:
+            return
+        if self.last_play is None or self.last_play["pid"] == p.id:
+            sug = ddz_hint(p.cards, None)
+            self.sys_msg(f"{p.name} 超时自动出牌")
+            self.do_play(p, sug)
+        else:
+            self.sys_msg(f"{p.name} 超时不要")
+            self.do_pass(p)
+
+    def on_pass(self, p):
+        if self.phase != "play" or self.turn is not p:
+            return
+        if self.last_play is None or self.last_play["pid"] == p.id:
+            return
+        self.do_pass(p)
+
+    def do_pass(self, p):
+        self.passed[p.id] = True
+        self.played[p.id] = []
+        self.pass_cnt += 1
+        if self.pass_cnt >= 2:
+            self.last_play = None
+            self.pass_cnt = 0
+        self._next_turn()
+
+    def on_play(self, p, cards):
+        if self.phase != "play" or self.turn is not p:
+            return
+        if not isinstance(cards, list) or not cards:
+            return
+        hand = list(p.cards)
+        picked = []
+        for c in cards:
+            try:
+                c = [int(c[0]), int(c[1])]
+            except (TypeError, ValueError, IndexError):
+                return
+            t = tuple(c)
+            if t in hand:
+                hand.remove(t)
+                picked.append(t)
+            else:
+                return
+        if len(picked) != len(cards):
+            return
+        t = ddz_type(picked)
+        if t is None:
+            return
+        if self.last_play and self.last_play["pid"] != p.id:
+            if not ddz_beat(t, self.last_play["type"]):
+                return
+        self.do_play(p, picked, t)
+
+    def do_play(self, p, picked, t=None):
+        if not picked:
+            return self.do_pass(p)
+        t = t or ddz_type(picked)
+        if t is None:
+            return
+        for c in picked:
+            p.cards.remove(tuple(c))
+        self.played[p.id] = picked
+        self.passed[p.id] = False
+        self.play_cnt[p.id] = self.play_cnt.get(p.id, 0) + 1
+        self.pass_cnt = 0
+        self.last_play = {"pid": p.id, "cards": picked, "type": t}
+        if t["t"] in ("bomb", "rocket"):
+            self.bomb_cnt += 1
+            self.sys_msg(f"💥 {p.name} 打出{DDZ_TYPE_NAMES[t['t']]}! 倍数 ×2")
+        self.broadcast()
+        if not p.cards:
+            asyncio.create_task(self.settle())
+            return
+        self._next_turn()
+
+    def _next_turn(self):
+        i = self.order.index(self.turn)
+        self.turn = self.order[(i + 1) % len(self.order)]
+        self.set_timer(DDZ_TURN_TIME, self.play_timeout)
+        self.broadcast()
+
+    def on_hint(self, p):
+        if self.phase != "play" or self.turn is not p:
+            return
+        last = None
+        if self.last_play and self.last_play["pid"] != p.id:
+            last = self.last_play["type"]
+        sug = ddz_hint(p.cards, last)
+        self.send(p, {"type": "hint", "cards": sug or []})
+
+    # ---------------- 结算 ----------------
+    async def settle(self):
+        self.cancel_timer()
+        act = self.active()
+        landlord_win = len(self.landlord.cards) == 0
+        if landlord_win:
+            self.spring = all(self.play_cnt.get(q.id, 0) == 0
+                              for q in act if q is not self.landlord)
+        else:
+            self.spring = self.play_cnt.get(self.landlord.id, 0) <= 1
+        mult = self.base_mult * (2 ** self.bomb_cnt) * (2 if self.spring else 1)
+        self.settle_mult = mult
+        for f in act:
+            if f is self.landlord:
+                continue
+            unit = BASE_SCORE * mult * (2 if self.doubled.get(f.id) else 1)
+            if landlord_win:
+                amt = min(unit, f.money, self.landlord.money)
+                f.money -= amt
+                self.landlord.money += amt
+            else:
+                amt = min(unit, self.landlord.money)
+                self.landlord.money -= amt
+                f.money += amt
+        for q in act:
+            q.money = max(0, q.money)
+            q.delta = q.money - q.money_start
+            q.revealed = True
+            q.confirmed = False
+        spring_txt = ""
+        if self.spring:
+            spring_txt = "·春天" if landlord_win else "·反春天"
+        self.last_results = []
+        for q in act:
+            role = "地主" if q is self.landlord else "农民"
+            extra = ""
+            if q is not self.landlord and self.doubled.get(q.id):
+                extra = "·加倍"
+            self.last_results.append({
+                "id": q.id, "name": q.name,
+                "ctype": f"{role}{spring_txt}{extra}",
+                "delta": q.delta, "win": q.delta > 0,
+                "banker": q is self.landlord,
+            })
+        self.spring_txt = spring_txt
+        self.record_round()
+        self.phase = "settle"
+        winner = self.landlord.name if landlord_win else "农民方"
+        self.sys_msg(f"🏁 {winner} 获胜! 倍数 ×{mult} (底×{self.base_mult} 炸×{2 ** self.bomb_cnt}{' 春天×2' if self.spring else ''})")
+        self.broadcast()
+        self.set_timer(SETTLE_TIME, self.finish_or_next)
+
+    # ---------------- 玩家离开 ----------------
+    def on_leave_round(self, p):
+        if self.phase == "waiting":
+            p.ready = False
+            self.broadcast()
+            return
+        if not p.in_round:
+            return
+        self.sys_msg(f"{p.name} 退出本局, 本局解散")
+        self.abort_round()
+
+    def remove_player(self, p):
+        if p in self.players:
+            self.players.remove(p)
+        if not self.players:
+            return
+        if p.in_round and self.phase not in ("settle", "finished"):
+            self.sys_msg(f"{p.name} 离开房间, 本局解散")
+            self.abort_round()
+        else:
+            self.broadcast()
+
+
+# ================================================================ 斗地主牌型
+DDZ_TYPE_NAMES = {
+    "rocket": "王炸", "bomb": "炸弹", "single": "单张", "pair": "对子",
+    "triple": "三张", "triple_one": "三带一", "triple_pair": "三带二",
+    "straight": "顺子", "pair_straight": "连对", "plane": "飞机",
+    "plane_singles": "飞机带单", "plane_pairs": "飞机带对",
+    "four_two_single": "四带二", "four_two_pair": "四带两对",
+}
+
+
+def ddz_deck():
+    deck = [(r, s) for r in range(3, 16) for s in range(4)]
+    deck.append((16, 4))   # 小王
+    deck.append((17, 4))   # 大王
+    random.shuffle(deck)
+    return deck
+
+
+def ddz_sort(cards):
+    return sorted(cards, key=lambda c: (c[0], c[1]), reverse=True)
+
+
+def ddz_type(cards):
+    """识别牌型, 返回 {t, main, len} 或 None; 牌用 (rank, suit), 16=小王 17=大王"""
+    n = len(cards)
+    if not n:
+        return None
+    rs = sorted(c[0] for c in cards)
+    if n == 2 and rs == [16, 17]:
+        return {"t": "rocket", "main": 17, "len": 2}
+    if n == 1:
+        return {"t": "single", "main": rs[0], "len": 1}
+    if any(r >= 16 for r in rs):
+        return None
+    cnt = {}
+    for r in rs:
+        cnt[r] = cnt.get(r, 0) + 1
+    g2 = sorted(r for r in cnt if cnt[r] == 2)
+    g3 = sorted(r for r in cnt if cnt[r] == 3)
+    g4 = sorted(r for r in cnt if cnt[r] == 4)
+
+    def run_ok(lst, k, top_min=3):
+        """lst 中是否存在 k 张连续(≤A), 返回最高的一段(要求顶 > top_min-1)"""
+        lst = [r for r in lst if r <= 14]
+        for i in range(len(lst) - k + 1):
+            seg = lst[i:i + k]
+            if seg[-1] - seg[0] == k - 1 and seg[-1] >= top_min:
+                return seg
+        return None
+
+    if n == 2 and g2 and len(cnt) == 1:
+        return {"t": "pair", "main": rs[0], "len": 2}
+    if n == 3 and g3:
+        return {"t": "triple", "main": rs[0], "len": 3}
+    if n == 4 and g4:
+        return {"t": "bomb", "main": rs[0], "len": 4}
+    if n == 4 and g3:
+        return {"t": "triple_one", "main": g3[0], "len": 4}
+    if n == 5 and g3 and g2:
+        return {"t": "triple_pair", "main": g3[0], "len": 5}
+    if n >= 5 and all(cnt[r] == 1 for r in cnt):
+        seg = run_ok(sorted(cnt), n)
+        if seg and len(seg) == n:
+            return {"t": "straight", "main": seg[-1], "len": n}
+    if n >= 6 and n % 2 == 0 and all(cnt[r] == 2 for r in cnt):
+        seg = run_ok(sorted(cnt), n // 2)
+        if seg and len(seg) == n // 2:
+            return {"t": "pair_straight", "main": seg[-1], "len": n}
+    if n >= 6 and n % 3 == 0 and all(cnt[r] == 3 for r in cnt):
+        seg = run_ok(sorted(cnt), n // 3)
+        if seg and len(seg) == n // 3:
+            return {"t": "plane", "main": seg[-1], "len": n}
+    if n >= 8 and n % 4 == 0:
+        k = n // 4
+        seg = run_ok(g3 + g4, k)
+        if seg:
+            return {"t": "plane_singles", "main": seg[-1], "len": n}
+    if n >= 10 and n % 5 == 0:
+        k = n // 5
+        seg = run_ok(g3 + g4, k)
+        if seg:
+            rest = dict(cnt)
+            for r in seg:
+                rest[r] -= 3
+                if rest[r] <= 0:
+                    del rest[r]
+            if all(c % 2 == 0 for c in rest.values()):
+                return {"t": "plane_pairs", "main": seg[-1], "len": n}
+    if n == 6 and g4:
+        return {"t": "four_two_single", "main": g4[0], "len": 6}
+    if n == 8 and g4:
+        rest = [r for r in sorted(cnt) if r != g4[0]]
+        if all(cnt[r] == 2 for r in rest) and len(rest) == 2:
+            return {"t": "four_two_pair", "main": g4[0], "len": 8}
+    return None
+
+
+def ddz_beat(a, b):
+    """a 能否压过 b"""
+    if a["t"] == "rocket":
+        return True
+    if b["t"] == "rocket":
+        return False
+    if a["t"] == "bomb" and b["t"] != "bomb":
+        return True
+    if a["t"] != b["t"] or a["len"] != b["len"]:
+        return False
+    return a["main"] > b["main"]
+
+
+def ddz_hint(hand, last):
+    """提示出牌: 返回建议出的牌列表; None 表示要不起"""
+    cnt = {}
+    for r, s in hand:
+        cnt[r] = cnt.get(r, 0) + 1
+    ranks = sorted(cnt)
+
+    def take(r, k):
+        out = []
+        for c in hand:
+            if c[0] == r and k > 0:
+                out.append(c)
+                k -= 1
+        return out
+
+    if last is None:
+        t = ddz_type(hand)
+        if t:
+            return list(hand)
+        return take(ranks[0], 1)
+
+    t, m, L = last["t"], last["main"], last["len"]
+    if t == "single":
+        for r in ranks:
+            if r > m:
+                return take(r, 1)
+    elif t == "pair":
+        for r in ranks:
+            if r > m and cnt[r] >= 2:
+                return take(r, 2)
+    elif t == "triple":
+        for r in ranks:
+            if r > m and cnt[r] >= 3:
+                return take(r, 3)
+    elif t == "triple_one":
+        for r in ranks:
+            if r > m and cnt[r] >= 3 and any(x != r for x in ranks):
+                w = min(x for x in ranks if x != r)
+                return take(r, 3) + take(w, 1)
+    elif t == "triple_pair":
+        for r in ranks:
+            if r > m and cnt[r] >= 3:
+                pr = [x for x in ranks if x != r and cnt[x] >= 2]
+                if pr:
+                    return take(r, 3) + take(pr[0], 2)
+    elif t == "straight":
+        for start in range(3, 15 - L + 1):
+            top = start + L - 1
+            if top > m and all(cnt.get(x, 0) >= 1 for x in range(start, top + 1)):
+                return [take(x, 1)[0] for x in range(start, top + 1)]
+    elif t == "pair_straight":
+        k = L // 2
+        for start in range(3, 15 - k + 1):
+            top = start + k - 1
+            if top > m and all(cnt.get(x, 0) >= 2 for x in range(start, top + 1)):
+                out = []
+                for x in range(start, top + 1):
+                    out += take(x, 2)
+                return out
+    elif t == "plane":
+        k = L // 3
+        for start in range(3, 15 - k + 1):
+            top = start + k - 1
+            if top > m and all(cnt.get(x, 0) >= 3 for x in range(start, top + 1)):
+                out = []
+                for x in range(start, top + 1):
+                    out += take(x, 3)
+                return out
+    elif t == "plane_singles":
+        k = L // 4
+        for start in range(3, 15 - k + 1):
+            top = start + k - 1
+            if top > m and all(cnt.get(x, 0) >= 3 for x in range(start, top + 1)):
+                out = []
+                for x in range(start, top + 1):
+                    out += take(x, 3)
+                wings = [c for c in hand if c not in out][:k]
+                if len(wings) >= k:
+                    return out + wings
+    elif t == "plane_pairs":
+        k = L // 5
+        for start in range(3, 15 - k + 1):
+            top = start + k - 1
+            if top > m and all(cnt.get(x, 0) >= 3 for x in range(start, top + 1)):
+                out = []
+                for x in range(start, top + 1):
+                    out += take(x, 3)
+                rest = {}
+                for r in ranks:
+                    left = cnt[r] - (3 if start <= r <= top else 0)
+                    if left > 0:
+                        rest[r] = left
+                prs = [r for r in rest if rest[r] >= 2]
+                if len(prs) >= k:
+                    for r in prs[:k]:
+                        out += take(r, 2)
+                    return out
+    elif t == "four_two_single":
+        for r in ranks:
+            if r > m and cnt[r] == 4:
+                wings = [x for x in ranks if x != r][:2]
+                if len(wings) >= 2:
+                    return take(r, 4) + take(wings[0], 1) + take(wings[1], 1)
+    elif t == "four_two_pair":
+        for r in ranks:
+            if r > m and cnt[r] == 4:
+                prs = [x for x in ranks if x != r and cnt[x] >= 2][:2]
+                if len(prs) >= 2:
+                    return take(r, 4) + take(prs[0], 2) + take(prs[1], 2)
+    # 炸弹 / 王炸
+    if t != "bomb":
+        for r in ranks:
+            if cnt[r] == 4:
+                return take(r, 4)
+    else:
+        for r in ranks:
+            if cnt[r] == 4 and r > m:
+                return take(r, 4)
+    if cnt.get(16) and cnt.get(17):
+        return take(16, 1) + take(17, 1)
+    return None

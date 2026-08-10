@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 棋牌对战 云端版 —— FastAPI + WebSocket(用于 Hugging Face Spaces 等云平台)
-支持: 欢乐斗牛(douniu) / 炸金花(zjh)。游戏逻辑在 gamecore.py(需一并上传)。
+支持: 欢乐斗牛(douniu) / 炸金花(zjh) / 斗地主(ddz)。游戏逻辑在 gamecore.py(需一并上传)。
 页面: GET /    通信: WebSocket /ws
 """
 import asyncio
@@ -54,7 +54,7 @@ async def ws_endpoint(ws: WebSocket):
                 game = msg.get("game") if msg.get("game") in gc.GAMES else "douniu"
                 player = gc.Player(ws, msg.get("name", ""))
                 code = make_room_code()
-                room_cls = gc.ZhajinhuaRoom if game == "zjh" else gc.DouniuRoom
+                room_cls = {"zjh": gc.ZhajinhuaRoom, "ddz": gc.DdzRoom}.get(game, gc.DouniuRoom)
                 room = room_cls(code)
                 try:
                     room.total_rounds = max(0, min(100, int(msg.get("rounds") or 0)))
@@ -90,6 +90,21 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "grab":
                 if isinstance(player.room, gc.DouniuRoom):
                     player.room.on_grab(player, msg.get("value", 0))
+            elif t == "call":
+                if isinstance(player.room, gc.DdzRoom):
+                    player.room.on_call(player, msg.get("value", 0))
+            elif t == "double":
+                if isinstance(player.room, gc.DdzRoom):
+                    player.room.on_double(player, msg.get("value", 0))
+            elif t == "play":
+                if isinstance(player.room, gc.DdzRoom):
+                    player.room.on_play(player, msg.get("cards", []))
+            elif t == "pass":
+                if isinstance(player.room, gc.DdzRoom):
+                    player.room.on_pass(player)
+            elif t == "hint":
+                if isinstance(player.room, gc.DdzRoom):
+                    player.room.on_hint(player)
             elif t == "action":
                 player.room.on_action(player, msg.get("action", ""), msg.get("target"))
             elif t == "next":

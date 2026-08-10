@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>欢乐棋牌 · 斗牛/炸金花 联机对战</title>
+<title>欢乐棋牌 · 斗牛/炸金花/斗地主 联机对战</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
   html { height: 100%; overflow: hidden; }
@@ -151,6 +151,16 @@
     color: #fff; font-size: 12px; border-radius: 10px; padding: 1px 8px; font-weight: bold;
     box-shadow: 0 0 10px rgba(255,60,60,.9);
   }
+  .seat .farmer-tag {
+    position: absolute; top: -12px; left: -20px; background: linear-gradient(#8dff8d, #2e8b2e);
+    color: #083308; font-size: 12px; border-radius: 10px; padding: 1px 8px; font-weight: bold;
+    box-shadow: 0 0 10px rgba(80,255,80,.8);
+  }
+  .seat .count-tag {
+    position: absolute; top: -12px; left: -26px; background: linear-gradient(#8ecbff, #2f7fd6);
+    color: #fff; font-size: 12px; border-radius: 10px; padding: 1px 8px; font-weight: bold;
+    box-shadow: 0 0 10px rgba(80,160,255,.8);
+  }
   .seat .seen-tag {
     position: absolute; top: -12px; right: -24px; background: linear-gradient(#8dff8d, #2e8b2e);
     color: #083308; font-size: 12px; border-radius: 10px; padding: 1px 8px; font-weight: bold;
@@ -200,6 +210,18 @@
   .card.big .corner { position: absolute; top: 6px; left: 8px; font-size: 15px; line-height: 1; text-align: center; }
   .card.big { position: relative; }
   .card.big.back.clickable { cursor: pointer; animation: backBreath 1.4s ease-in-out infinite alternate; }
+  /* 大小王 */
+  .card.jk span { writing-mode: vertical-rl; font-size: 15px; letter-spacing: 3px; font-weight: 900; color: #444; }
+  .card.jk.red span { color: #d32f2f; }
+  .card.big.jk span { font-size: 26px; letter-spacing: 6px; }
+  /* 斗地主: 选中的手牌 */
+  .card.big.sel { transform: translateY(-18px); z-index: 6; box-shadow: 0 0 0 3px #ffd76a, 0 0 16px rgba(255,200,60,.8), 0 8px 18px rgba(0,0,0,.6); }
+  /* 斗地主: 手牌叠排 */
+  #mycards.ddz { gap: 0; }
+  #mycards.ddz .card.big { margin-left: -58px; cursor: pointer; }
+  #mycards.ddz .card.big:first-child { margin-left: 0; }
+  #mycards.ddz .card.big:hover { transform: translateY(-10px); }
+  #mycards.ddz .card.big.sel:hover { transform: translateY(-18px); }
   @keyframes backBreath {
     from { box-shadow: 0 8px 18px rgba(0,0,0,.6), 0 0 6px 1px rgba(255,215,106,.35); }
     to   { box-shadow: 0 8px 18px rgba(0,0,0,.6), 0 0 22px 5px rgba(255,215,106,.85); }
@@ -258,6 +280,22 @@
     font-size: 22px; font-weight: bold; color: #ffd76a; margin-bottom: 6px; min-height: 28px;
     text-shadow: 0 0 14px rgba(255,200,60,.8), 0 2px 4px #000;
   }
+  /* 斗地主: 我打出的牌 / 底牌 */
+  #myPlay { display: flex; gap: 4px; justify-content: center; align-items: center; min-height: 0; margin-bottom: 4px; perspective: 700px; }
+  #myPlay .card { width: 40px; height: 58px; font-size: 14px; }
+  #myPlay .card .suit { font-size: 15px; }
+  #myPlay .card.jk span { font-size: 12px; letter-spacing: 2px; }
+  .pass-bubble { background: rgba(0,0,0,.55); border-radius: 14px; padding: 4px 18px; font-size: 15px; color: #cfe9d6; }
+  #dipai { position: absolute; left: 50%; top: 7%; transform: translateX(-50%); display: flex; gap: 5px; z-index: 6; padding-top: 14px; }
+  #dipai .dp-tip { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: rgba(255,228,150,.85); letter-spacing: 2px; }
+  /* 斗地主: 倒计时移到牌桌上方(底牌下方), 避免与底牌/自己座位重叠 */
+  body.ddz-game #countdown { top: 26%; }
+  /* 斗地主: 对手座位叠牌 */
+  .seat .cards.ddz { gap: 0; min-height: 76px; }
+  .seat .cards.ddz .card { margin-left: -44px; }
+  .seat .cards.ddz .card:first-child { margin-left: 0; }
+  .seat .cards.ddz .card.jk span { font-size: 12px; letter-spacing: 2px; }
+  #mycards.ddz.mysettle .card.big { margin-left: -50px; }
 
   /* ---------- 牌型大字特效 ---------- */
   #typePop {
@@ -413,6 +451,8 @@
     .card.big .corner { font-size: 10px; top: 4px; left: 5px; }
     .card.back.mini { width: 28px; height: 40px; }
     #mycards { gap: 6px; min-height: 82px; margin-bottom: 6px; }
+    #mycards.ddz { gap: 0; }
+    #mycards.ddz .card.big { margin-left: -34px; }
     #myarea { height: 168px; padding-bottom: 8px; }
     #myTypeTag { font-size: 15px; min-height: 20px; margin-bottom: 3px; }
     #actions { gap: 6px; min-height: 40px; }
@@ -447,7 +487,62 @@
     .card.big { width: 48px; height: 70px; font-size: 17px; }
     .card.big .suit { font-size: 20px; }
     #mycards { min-height: 70px; }
+    #mycards.ddz .card.big { margin-left: -32px; }
     #myarea { height: 150px; }
+  }
+  /* ---------- 手机横屏适配 ---------- */
+  @media (orientation: landscape) and (max-height: 520px) {
+    #topbar { height: 34px; gap: 6px; padding: 0 8px; font-size: 11px; }
+    #topbar .logo { font-size: 13px; }
+    #topbar .chip { padding: 2px 8px; }
+    #table { top: 34px; }
+    #sidebar { top: 34px; }
+    .seat { width: 108px; }
+    .seat.self { left: 15% !important; top: 78% !important; width: 96px; }
+    .seat .avatar { width: 34px; height: 34px; font-size: 16px; }
+    .seat .banker-tag, .seat .seen-tag, .seat .farmer-tag, .seat .count-tag { font-size: 9px; top: -9px; padding: 1px 6px; }
+    .seat .count-tag { left: -20px; } .seat .farmer-tag { left: -16px; } .seat .banker-tag { right: -16px; }
+    .seat .pname { font-size: 10px; margin-top: 1px; }
+    .seat .pmoney { font-size: 9px; }
+    .seat .pstatus { font-size: 9px; min-height: 12px; }
+    .seat .cards { min-height: 40px; gap: 2px; margin-top: 2px; }
+    .seat .cdelta { font-size: 12px; min-height: 14px; }
+    .card { width: 26px; height: 38px; font-size: 11px; border-radius: 4px; }
+    .card .suit { font-size: 12px; }
+    .card.jk span { font-size: 9px; letter-spacing: 1px; }
+    .card.big { width: 44px; height: 64px; font-size: 16px; border-radius: 6px; }
+    .card.big .suit { font-size: 18px; }
+    .card.big .corner { font-size: 9px; top: 3px; left: 4px; }
+    .card.big.jk span { font-size: 14px; letter-spacing: 3px; }
+    .card.back.mini { width: 22px; height: 32px; }
+    #mycards { gap: 4px; min-height: 64px; margin-bottom: 4px; }
+    #mycards.ddz { gap: 0; }
+    #mycards.ddz .card.big { margin-left: -28px; }
+    #myarea { height: 126px; padding-bottom: 6px; }
+    #myTypeTag { font-size: 12px; min-height: 16px; margin-bottom: 2px; }
+    #myPlay .card { width: 26px; height: 38px; font-size: 10px; }
+    #myPlay .card .suit { font-size: 11px; }
+    #actions { gap: 6px; min-height: 30px; }
+    #actions .btn-act { font-size: 12px; padding: 6px 10px; }
+    #countdown { font-size: 10px; padding: 3px 12px; top: 5%; }
+    #countdown b { font-size: 13px; }
+    body.ddz-game #countdown { top: 16%; }
+    .deck-spot { width: 64px; height: 64px; top: 34%; }
+    #deck { width: 28px; height: 42px; }
+    #potDisplay { padding: 4px 12px; font-size: 10px; top: 52%; }
+    #potDisplay b { font-size: 14px; }
+    #dipai { top: 3%; padding-top: 10px; }
+    #dipai .card { width: 22px; height: 32px; font-size: 9px; }
+    #dipai .card .suit { font-size: 10px; }
+    #typePop .tp-text { font-size: 40px; letter-spacing: 3px; }
+    #typePop.epic .tp-text { font-size: 46px; }
+    #typePop .tp-name { font-size: 11px; }
+    .settle-box { min-width: 0; width: 92vw; padding: 12px 16px; }
+    .settle-box h2 { font-size: 16px; margin-bottom: 8px; }
+    .settle-row { font-size: 12px; padding: 4px 0; }
+    .login-box { padding: 14px 16px; }
+    .login-box h1 { font-size: 22px; }
+    .game-card { font-size: 14px; padding: 8px 4px; }
   }
 </style>
 </head>
@@ -463,6 +558,7 @@
     <div class="game-select">
       <div class="game-card selected" id="gcDouniu" onclick="pickGame('douniu')">🐂 欢乐斗牛<span>5张牌 · 抢庄对决</span></div>
       <div class="game-card" id="gcZjh" onclick="pickGame('zjh')">🃏 炸金花<span>3张牌 · 看牌跟注比牌</span></div>
+      <div class="game-card" id="gcDdz" onclick="pickGame('ddz')">👑 斗地主<span>3人局 · 地主vs农民</span></div>
     </div>
     <div class="round-select">
       <span class="rs-label">本场把数:</span>
@@ -503,6 +599,7 @@
 <!-- 我的区域 -->
 <div id="myarea" style="display:none">
   <div id="myTypeTag"></div>
+  <div id="myPlay"></div>
   <div id="mycards"></div>
   <div id="actions"></div>
 </div>
@@ -581,6 +678,22 @@
       <b>弃牌</b>: 放弃已下筹码。超时自动跟注(跟不起则自动弃牌)。<br>
       最后剩下的玩家赢得全部奖池。破产后可领取 1000 救济金。
     </div>
+    <div id="rulesDdz" style="display:none">
+      <h2>👑 斗地主规则</h2>
+      <p>3 人局, 54 张牌。每人 17 张 + 3 张底牌。叫分(1-3分)最高者当地主, 拿到底牌; 无人叫分则重新发牌。</p>
+      <p>地主先出牌, 逆时针轮流; 出的牌必须压过上家, 要不起可<b>不要</b>; 两家不要后由最后出牌者自由出牌。先出完手牌的一方获胜。</p>
+      <b>牌型(从大到小):</b>
+      <table>
+        <tr><td>王炸 (大小王)</td><td>最大</td></tr>
+        <tr><td>炸弹 (4张同点)</td><td></td></tr>
+        <tr><td>单张 / 对子 / 三张 / 三带一 / 三带二</td><td></td></tr>
+        <tr><td>顺子 (≥5连) / 连对 (≥3连对)</td><td></td></tr>
+        <tr><td>飞机 (≥2连三) 可带单/带对</td><td></td></tr>
+        <tr><td>四带二 / 四带两对</td><td></td></tr>
+      </table>
+      <br><b>结算:</b> 底分10 × 叫分(1-3) × 2^炸弹数; 春天/反春天再 ×2; 农民加倍则个人再 ×2。<br>
+      地主赢: 两农民各付相应金币; 农民赢: 地主各付。点击手牌选中后出牌, 💡提示可自动选牌。
+    </div>
     <br><button class="btn-gold" onclick="toggleRules(false)">知道了</button>
   </div>
 </div>
@@ -589,11 +702,13 @@
 
 <script>
 const SUITS = ["♠", "♥", "♣", "♦"];
-const RANK = {1:"A", 11:"J", 12:"Q", 13:"K"};
+const RANK = {1:"A", 11:"J", 12:"Q", 13:"K", 14:"A", 15:"2"};
 const DN_SPECIAL = ["炸弹","四花牛","五花牛","五小牛"];   // 斗牛顶级牌型
 const ZJH_EPIC = ["豹子","顺金"];                          // 炸金花顶级牌型
 const ZJH_EMOJI = {"豹子":"💥","顺金":"🌈","金花":"🌸","顺子":"🪜","对子":"🎴","单张":""};
+const DDZ_NAMES = {rocket:"王炸",bomb:"炸弹",single:"单张",pair:"对子",triple:"三张",triple_one:"三带一",triple_pair:"三带二",straight:"顺子",pair_straight:"连对",plane:"飞机",plane_singles:"飞机带单",plane_pairs:"飞机带对",four_two_single:"四带二",four_two_pair:"四带两对"};
 let ws = null, state = null, myId = null, pickedGame = "douniu", pickedRounds = 0;
+let ddzSel = new Set();   // 斗地主: 选中的手牌索引
 
 /* ================ 特效引擎 ================ */
 const FX = {
@@ -868,6 +983,7 @@ function onMsg(m) {
   if (m.type === "error") { loginErr(m.msg); toast(m.msg); return; }
   if (m.type === "chat") { addChat(`<b>${esc(m.name)}:</b> ${esc(m.text)}`); return; }
   if (m.type === "state") { handleState(m); }
+  if (m.type === "hint") { applyHint(m.cards || []); }
 }
 
 /* ================ 状态与事件检测 ================ */
@@ -894,10 +1010,14 @@ function handleState(m) {
     settleFxShown = false;
     prevContrib = {};
     justFlipped = new Set();
+    ddzSel = new Set();
   }
 
   // 手部动作: 发牌(进入下注阶段时荷官手逐张发牌) / 推筹码 / 看牌手势
   if (prev && m.phase === "bet" && prev.phase !== "bet") {
+    setTimeout(() => playDeal(m.players.filter(p => p.inRound)), 60);
+  }
+  if (prev && isDdz() && m.phase === "call" && prev.phase !== "call") {
     setTimeout(() => playDeal(m.players.filter(p => p.inRound)), 60);
   }
   if (m.phase === "bet" && prev) {
@@ -955,6 +1075,32 @@ function handleState(m) {
     }
   }
 
+  // 斗地主: 春天/反春天特效
+  if (prev && isDdz() && m.phase === "settle" && prev.phase !== "settle" && m.spring) {
+    const landlordWin = m.results.find(r => r.banker) && m.results.find(r => r.banker).delta > 0;
+    showTypePop(landlordWin ? "春天" : "反春天", landlordWin ? "🌸 春天 🌸" : "🌾 反春天 🌾", true);
+    screenFlash("pink"); FX.confetti(140);
+  }
+
+  // 斗地主: 炸弹/王炸特效
+  if (prev && isDdz() && m.lastPlay && m.lastPlay.cards) {
+    const lp = prev.lastPlay;
+    if (!lp || !lp.cards || JSON.stringify(lp.cards) !== JSON.stringify(m.lastPlay.cards)) {
+      if (m.lastPlay.type && (m.lastPlay.type.t === "bomb" || m.lastPlay.type.t === "rocket")) {
+        const isRocket = m.lastPlay.type.t === "rocket";
+        showTypePop(isRocket ? "王炸" : "炸弹", isRocket ? "🚀 王炸 🚀" : "💣 炸弹 💣", true);
+        screenFlash("pink"); screenShake(); FX.confetti(100);
+      }
+    }
+  }
+
+  // 斗地主: 手牌数量变化(出牌/新一局)时清空选牌
+  if (isDdz()) {
+    const pm = prev && prev.players.find(p => p.id === m.you);
+    const cm = m.players.find(p => p.id === m.you);
+    if (!pm || !cm || pm.cards.length !== cm.cards.length || m.phase !== "play") ddzSel = new Set();
+  }
+
   // 结算特效
   if (m.phase === "settle" && !settleFxShown && m.results.length) {
     settleFxShown = true;
@@ -1002,6 +1148,7 @@ function pickGame(g) {
   pickedGame = g;
   document.getElementById("gcDouniu").classList.toggle("selected", g === "douniu");
   document.getElementById("gcZjh").classList.toggle("selected", g === "zjh");
+  document.getElementById("gcDdz").classList.toggle("selected", g === "ddz");
 }
 function pickRounds(n) {
   pickedRounds = n;
@@ -1033,16 +1180,19 @@ function loginErr(t) { document.getElementById("loginErr").textContent = t; }
 /* ================ 渲染 ================ */
 function me() { return state ? state.players.find(p => p.id === myId) : null; }
 function isZjh() { return state && state.game === "zjh"; }
+function isDdz() { return state && state.game === "ddz"; }
 
 function render() {
   if (!state) return;
-  document.getElementById("tLogo").textContent = isZjh() ? "🃏 炸金花" : "🐂 欢乐斗牛";
+  document.getElementById("tLogo").textContent = isDdz() ? "👑 斗地主" : (isZjh() ? "🃏 炸金花" : "🐂 欢乐斗牛");
   document.getElementById("tRoom").textContent = state.room;
   document.getElementById("tRound").textContent = state.roundNo;
   document.getElementById("tRoundTotal").textContent = state.totalRounds ? "/" + state.totalRounds : "";
   document.getElementById("tBase").textContent = state.base;
-  document.getElementById("rulesDouniu").style.display = isZjh() ? "none" : "";
+  document.getElementById("rulesDouniu").style.display = (!isZjh() && !isDdz()) ? "" : "none";
   document.getElementById("rulesZjh").style.display = isZjh() ? "" : "none";
+  document.getElementById("rulesDdz").style.display = isDdz() ? "" : "none";
+  document.body.classList.toggle("ddz-game", !!isDdz());
   renderSeats();
   renderMyArea();
   renderCountdown();
@@ -1082,6 +1232,14 @@ function renderSeats() {
     surface.appendChild(pot);
   }
   table.appendChild(surface);
+  // 斗地主底牌(叫分后全员可见)
+  if (isDdz() && state.topCards && state.topCards.length && state.phase !== "call") {
+    const dp = document.createElement("div");
+    dp.id = "dipai";
+    const curMult = (state.baseMult || 1) * Math.pow(2, state.bombCnt || 0);
+    dp.innerHTML = `<span class="dp-tip">底 牌 · 当前 ×${curMult}</span>` + state.topCards.map(c => cardHtml(c)).join("");
+    table.appendChild(dp);
+  }
   const others = state.players.filter(p => p.id !== myId);
   const positions = seatPositions(others.length);
   others.forEach((p, i) => {
@@ -1097,11 +1255,17 @@ function renderSeats() {
 
 function seatEl(p, x, y, isSelf) {
   const d = document.createElement("div");
-  d.className = "seat" + (!p.inRound && state.phase !== "waiting" ? " out" : "") + (p.isBanker ? " is-banker" : "") + (state.phase === "bet" && state.turnId === p.id ? " turning" : "");
+  d.className = "seat" + (isSelf ? " self" : "") + (!p.inRound && state.phase !== "waiting" ? " out" : "") + (p.isBanker ? " is-banker" : "") + (((isDdz() ? state.phase === "play" : state.phase === "bet") && state.turnId === p.id) ? " turning" : "");
   d.style.left = x + "%"; d.style.top = y + "%";
   const face = ["😀","😎","🤠","😺","🐼"][p.id % 5];
   let status = "", tag = "";
   if (state.phase === "waiting") status = p.ready ? "✅ 已准备" : "等待准备…";
+  else if (p.inRound && isDdz()) {
+    if (state.phase === "call") status = p.callVal != null ? (p.callVal === 0 ? "不叫" : `叫 ${p.callVal} 分`) : "🤔 叫分中…";
+    else if (state.phase === "double") status = p.isBanker ? "👑 地主" : (p.doubled === true ? "⚡ 加倍" : p.doubled === false ? "不加倍" : "考虑中…");
+    else if (state.phase === "play") status = state.turnId === p.id ? "🤔 出牌中…" : (state.passed && state.passed[p.id] ? "不要" : (state.lastPlay && state.lastPlay.pid === p.id && state.lastPlay.type ? (DDZ_NAMES[state.lastPlay.type.t] || "") : ""));
+    else status = p.isBanker ? "👑 地主" : "🌾 农民";
+  }
   else if (p.inRound) {
     if (isZjh()) {
       if (state.phase === "bet") {
@@ -1118,17 +1282,26 @@ function seatEl(p, x, y, isSelf) {
   } else status = "旁观中";
 
   d.innerHTML = `
-    <div class="avatar">${face}${p.isBanker ? '<span class="banker-tag">庄</span>' : ''}${tag}</div>
+    <div class="avatar">${face}${p.isBanker ? `<span class="banker-tag">${isDdz() ? "地主" : "庄"}</span>` : ''}${isDdz() && p.inRound && state.phase !== "call" && state.phase !== "waiting" && !p.isBanker ? '<span class="farmer-tag">农民</span>' : ''}${isDdz() && p.cardCount != null && state.phase !== "settle" && state.phase !== "finished" ? `<span class="count-tag" style="left:auto;right:-26px;top:auto;bottom:-6px">${p.cardCount}张</span>` : ''}${tag}</div>
     <div class="pname">${esc(p.name)}${isSelf ? "(我)" : ""}</div>
     <div class="pmoney">💰 ${p.money}</div>
     <div class="pstatus">${status}</div>
-    ${isSelf ? "" : `<div class="cards">${cardsHtml(p)}</div>`}
+    ${isSelf ? "" : `<div class="cards${isDdz() ? " ddz" : ""}">${cardsHtml(p)}</div>`}
     <div class="cdelta ${p.delta > 0 ? "win" : p.delta < 0 ? "lose" : ""} ${state.phase === "settle" && p.delta && Date.now() - settleEnteredAt < 1600 ? "pop" : ""}">${p.delta > 0 ? "+" + p.delta : p.delta || ""}</div>`;
   return d;
 }
 
 function cardsHtml(p) {
   if (p.folded) return "";   // 弃牌不再显示牌
+  if (isDdz()) {
+    if (state.phase === "call" || state.phase === "double") return backCards(p.cardCount || 17);
+    if (state.phase === "settle" || state.phase === "finished") {
+      return p.cards && p.cards.length ? p.cards.map(c => cardHtml(c)).join("") : "";
+    }
+    const pl = state.played && state.played[p.id];
+    if (pl && pl.length) return pl.map(c => cardHtml(c)).join("");
+    return "";
+  }
   if (!p.cards.length) {
     if (state.phase === "grab" || state.phase === "bet") return backCards(isZjh() ? 3 : 5);
     if ((state.phase === "reveal" || state.phase === "settle") && p.inRound) return backCards(isZjh() ? 3 : 5);
@@ -1142,6 +1315,9 @@ function cardsHtml(p) {
 function backCards(n) { return Array(n).fill('<div class="card back"></div>').join(""); }
 function cardHtml(c, isCombo, big, special) {
   const [r, s] = c;
+  if (r === 16 || r === 17) {
+    return `<div class="card ${big ? "big" : ""} jk ${r === 17 ? "red" : ""} ${isCombo ? "combo" : ""}"><span>${r === 17 ? "大王" : "小王"}</span></div>`;
+  }
   const corner = big ? `<div class="corner">${RANK[r] || r}<br>${SUITS[s]}</div>` : "";
   return `<div class="card ${big ? "big" : ""} ${s===1||s===3 ? "red" : ""} ${isCombo ? "combo" : ""} ${special ? "special-card" : ""}">
     ${corner}<div>${RANK[r] || r}</div><div class="suit">${SUITS[s]}</div></div>`;
@@ -1154,6 +1330,11 @@ function renderMyArea() {
   const actions = document.getElementById("actions");
   const tag = document.getElementById("myTypeTag");
   actions.innerHTML = ""; tag.textContent = "";
+  const myPlayEl = document.getElementById("myPlay");
+  if (myPlayEl) myPlayEl.innerHTML = "";
+
+  /* -------- 斗地主 -------- */
+  if (isDdz()) { renderDdzMyArea(my, cards, actions, tag, myPlayEl); return; }
 
   const zjh = isZjh();
   // 炸金花未看牌时, 自己的牌显示牌背
@@ -1263,9 +1444,117 @@ function renderMyArea() {
   }
 }
 
+/* ================ 斗地主: 我的区域 ================ */
+function renderDdzMyArea(my, cards, actions, tag, myPlayEl) {
+  const ph = state.phase;
+  // 自己的手牌(可点选)
+  if (my.cards.length) {
+    cards.className = "ddz" + (ph === "settle" || ph === "finished" ? " mysettle" : "");
+    cards.innerHTML = my.cards.map((c, i) => {
+      let html = cardHtml(c, false, true).replace('<div class="card', `<div data-i="${i}" onclick="ddzToggle(${i})" class="card${ddzSel.has(i) ? " sel" : ""}`);
+      if (!myDealAnimDone) html = html.replace('<div data-i', `<div style="animation: dealIn .55s cubic-bezier(.2,.8,.3,1) ${i * 0.05}s backwards" data-i`);
+      return html;
+    }).join("");
+    if (!myDealAnimDone) setTimeout(() => myDealAnimDone = true, 900);
+  } else {
+    cards.className = ""; cards.innerHTML = "";
+  }
+  tag.textContent = "";   // 身份已由座位上的地主/农民角标展示
+  // 自己打出的牌 / 不要
+  if (myPlayEl) {
+    const myPlayed = state.played && state.played[my.id];
+    if (myPlayed && myPlayed.length) {
+      const tn = state.lastPlay && state.lastPlay.pid === my.id && state.lastPlay.type ? `<span class="pass-bubble">${DDZ_NAMES[state.lastPlay.type.t] || ""}</span>` : "";
+      myPlayEl.innerHTML = myPlayed.map(c => cardHtml(c)).join("") + tn;
+    }
+    else if (ph === "play" && state.passed && state.passed[my.id]) myPlayEl.innerHTML = '<span class="pass-bubble">不 要</span>';
+  }
+  // 操作按钮
+  if (ph === "waiting") {
+    if (my.money < state.base) {
+      actions.innerHTML = `<button class="btn-act blue" onclick="send({type:'relief'})">💰 领取救济金(+1000)</button>`;
+    } else {
+      actions.innerHTML = my.ready
+        ? `<button class="btn-act gray" onclick="send({type:'ready'})">取消准备</button><span>等待其他玩家准备…</span>`
+        : `<button class="btn-act" onclick="send({type:'ready'})">✋ 准备</button>`;
+      if (state.players.length < 3) actions.innerHTML += `<span>把房间号发给好友, 3人开局</span>`;
+    }
+    return;
+  }
+  if (!my.inRound) {
+    actions.innerHTML = `<span style="opacity:.7">本局旁观中</span>`;
+    return;
+  }
+  if (ph === "call") {
+    if (state.turnId === my.id) {
+      const cm = state.callMax || 0;
+      actions.innerHTML = `<span>叫分(当前最高 ${cm} 分):</span>` +
+        `<button class="btn-act gray" onclick="send({type:'call',value:0})">不叫</button>` +
+        [1,2,3].filter(v => v > cm).map(v => `<button class="btn-act" onclick="send({type:'call',value:${v}})">${v}分</button>`).join("");
+    } else actions.innerHTML = `<span style="opacity:.7">等待其他玩家叫分…</span>
+      <button class="mini-btn" onclick="send({type:'sitout'})">退出本局</button>`;
+    return;
+  }
+  if (ph === "double") {
+    if (!my.isBanker && my.doubled == null) {
+      actions.innerHTML = `<span>超级加倍?</span>
+        <button class="btn-act" onclick="send({type:'double',value:1})">⚡ 加倍</button>
+        <button class="btn-act gray" onclick="send({type:'double',value:0})">不加倍</button>`;
+    } else actions.innerHTML = `<span style="opacity:.7">等待农民选择加倍…</span>`;
+    return;
+  }
+  if (ph === "play") {
+    if (state.turnId === my.id) {
+      const free = !state.lastPlay || state.lastPlay.pid === my.id;
+      actions.innerHTML =
+        `<button class="btn-act" id="btnPlay" disabled onclick="ddzPlay()">出 牌</button>` +
+        (free ? "" : `<button class="btn-act gray" onclick="send({type:'pass'})">不 要</button>`) +
+        `<button class="btn-act blue" onclick="send({type:'hint'})">💡 提示</button>`;
+      ddzUpdatePlayBtn();
+    } else {
+      actions.innerHTML = `<span style="opacity:.7">等待其他玩家出牌…</span>
+        <button class="mini-btn" onclick="send({type:'sitout'})">退出本局</button>`;
+    }
+    return;
+  }
+}
+function ddzToggle(i) {
+  if (!isDdz() || state.phase !== "play" || state.turnId !== state.you) return;
+  if (ddzSel.has(i)) ddzSel.delete(i); else ddzSel.add(i);
+  const cards = document.getElementById("mycards");
+  cards.querySelectorAll(".card").forEach(el => {
+    if (el.dataset.i === String(i)) el.classList.toggle("sel", ddzSel.has(i));
+  });
+  ddzUpdatePlayBtn();
+}
+function ddzUpdatePlayBtn() {
+  const b = document.getElementById("btnPlay");
+  if (b) b.disabled = ddzSel.size === 0;
+}
+function ddzPlay() {
+  const my = me();
+  if (!my) return;
+  const cs = [...ddzSel].sort((a, b) => a - b).map(i => my.cards[i]).filter(Boolean);
+  if (!cs.length) return;
+  ddzSel = new Set();
+  send({ type: "play", cards: cs });
+}
+function applyHint(cs) {
+  const my = me();
+  if (!my) return;
+  ddzSel = new Set();
+  if (!cs || !cs.length) { toast("要不起, 建议不要"); renderMyArea(); return; }
+  const used = new Set();
+  for (const c of cs) {
+    const idx = my.cards.findIndex((mc, i) => !used.has(i) && mc[0] === c[0] && mc[1] === c[1]);
+    if (idx >= 0) { used.add(idx); ddzSel.add(idx); }
+  }
+  renderMyArea();
+}
+
 function renderCountdown() {
   const box = document.getElementById("countdown");
-  const texts = { grab: "抢庄倒计时", bet: "行动倒计时", reveal: "亮牌", settle: "自动开始下一局" };
+  const texts = { grab: "抢庄倒计时", bet: "行动倒计时", reveal: "亮牌", settle: "自动开始下一局", call: "叫分倒计时", double: "加倍倒计时", play: "出牌倒计时" };
   if (state && state.countdown > 0 && texts[state.phase]) {
     box.style.display = "";
     document.getElementById("cdText").textContent = texts[state.phase];
@@ -1294,7 +1583,7 @@ function renderSettle() {
   }
   if (state.phase === "settle" && state.results.length) {
     mask.style.display = "flex";
-    document.getElementById("settleTitle").textContent = isZjh() ? "🏆 本局结算 · 赢家通吃奖池" : "📊 本局结算";
+    document.getElementById("settleTitle").textContent = isDdz() ? `👑 斗地主结算 · 倍数 ×${state.settleMult || 1}` : (isZjh() ? "🏆 本局结算 · 赢家通吃奖池" : "📊 本局结算");
     document.getElementById("settleRows").innerHTML = state.results.map((r, i) => {
       const pl = state.players.find(x => x.id === r.id);
       const ok = pl && pl.confirmed ? " ✅" : "";
