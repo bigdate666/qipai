@@ -569,6 +569,7 @@ class ZhajinhuaRoom(Room):
         super().__init__(code)
         self.pot = 0
         self.order = []          # 本局行动顺序
+        self.compare_started = False  # 有人比牌后进入比牌阶段
 
     def active_zjh(self):
         return [p for p in self.players if p.in_round and not p.folded]
@@ -576,6 +577,7 @@ class ZhajinhuaRoom(Room):
     def state_for(self, p):
         st = self.base_state(p)
         st["pot"] = self.pot
+        st["compareStarted"] = self.compare_started
         for q in self.players:
             info = {
                 "id": q.id, "name": q.name, "money": q.money,
@@ -614,6 +616,7 @@ class ZhajinhuaRoom(Room):
             return self.abort_round()
         deck = self.new_deck()
         self.pot = 0
+        self.compare_started = False
         for i, p in enumerate(act):
             p.money_start = p.money
             ante = min(BASE_SCORE, p.money)
@@ -660,6 +663,17 @@ class ZhajinhuaRoom(Room):
         if self.phase != "bet":
             return
         act = self.active_zjh()
+        if self.compare_started:
+            # 比牌阶段: 直接循环到下一位活跃玩家
+            i = self.order.index(self.turn) if self.turn in self.order else -1
+            n = len(self.order)
+            for step in range(1, n + 1):
+                q = self.order[(i + step) % n]
+                if q in act:
+                    self.turn = q
+                    break
+            self.broadcast()
+            return
         nxt = None
         if self.turn and self.turn in self.order:
             i = self.order.index(self.turn)
@@ -687,14 +701,27 @@ class ZhajinhuaRoom(Room):
         self.broadcast()
 
     def on_action(self, p, action, target=None):
-        if self.phase != "bet" or not p.in_round or p.folded or self.turn is not p:
+        if self.phase != "bet" or not p.in_round or p.folded:
             return
+        # 看牌随时可以, 不按顺序
         if action == "look":
             if p.seen:
                 return
             p.seen = True
             self.sys_msg(f"{p.name} 看牌了")
             self.broadcast()
+            return
+        if self.turn is not p:
+            return
+        # 比牌: 轮到自己时随时可以发起
+        if action == "compare":
+            self.do_compare(p, target)
+            return
+        # 比牌阶段: 禁止下注操作, 只能过牌(或看牌/比牌)
+        if self.compare_started:
+            if action == "pass":
+                self.sys_msg(f"{p.name} 过")
+                self.advance()
             return
         if action == "call":
             self.after_call(p)
@@ -739,6 +766,8 @@ class ZhajinhuaRoom(Room):
         loser.matched = True
         p.matched = True
         self.sys_msg(f"{p.name} 与 {t.name} 比牌: {loser.name} 输了")
+        self.compare_started = True
+        self.sys_msg("⚔ 进入比牌阶段: 剩余玩家不能再下注, 轮到者只能 看牌/比牌/过")
         if len(self.active_zjh()) <= 1:
             self.end_hand()
         else:

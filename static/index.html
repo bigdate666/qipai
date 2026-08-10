@@ -685,10 +685,10 @@
         <tr><td>单张</td><td>最小</td></tr>
       </table>
       <br><b>行动说明:</b><br>
-      <b>看牌</b>: 查看自己的牌(免费), 看牌后跟注费用翻倍;<br>
+      <b>看牌</b>: 查看自己的牌(免费), 随时可看、不按顺序, 看牌后跟注费用翻倍;<br>
       <b>跟注</b>: 盲跟 = 当前底注, 看牌后 = 底注×2;<br>
       <b>加注</b>: 底注翻倍(最高底分×8), 所有人需重新跟平;<br>
-      <b>比牌</b>: 付一次跟注费与任意对手比大小, 输家淘汰(平局算比牌者输);<br>
+      <b>比牌</b>: 轮到你时付一次跟注费与任意对手比大小, 输家淘汰(平局算比牌者输); 一旦有人比牌即进入<b>比牌阶段</b>: 剩余玩家不能再跟注/加注/弃牌, 轮到者只能 看牌/比牌/过, 直到决出赢家;<br>
       <b>弃牌</b>: 放弃已下筹码。完全手动控制, 无倒计时。<br>
       最后剩下的玩家赢得全部奖池。破产后可领取 1000 救济金。
     </div>
@@ -1412,22 +1412,28 @@ function renderMyArea() {
     const stake = state.stake || state.base;
     const cap = state.base * 8;
     const myCost = my.seen ? stake * 2 : stake;
+    const cs = !!state.compareStarted;
+    const targets = state.players.filter(p => p.id !== my.id && p.inRound && !p.folded);
+    const cmpBtns = targets.length ? targets.map(t => `<button class="btn-act red" onclick="send({type:'action',action:'compare',target:${t.id}})">比牌·${esc(t.name)}</button>`).join("") : "";
+    let html = `<span>底注 <b style="color:#ffd76a">${stake}</b> · 奖池 <b style="color:#ffd76a">${state.pot||0}</b>${cs ? " · ⚔ 比牌阶段" : ""}</span>`;
     if (state.turnId === my.id) {
-      let html = `<span>底注 <b style="color:#ffd76a">${stake}</b> · 奖池 <b style="color:#ffd76a">${state.pot||0}</b></span>`;
       if (!my.seen) html += `<button class="btn-act blue" onclick="send({type:'action',action:'look'})">👁 看牌</button>`;
-      html += `<button class="btn-act" onclick="send({type:'action',action:'call'})">跟注 ${Math.min(myCost, my.money)}</button>`;
-      const raiseCost = (my.seen ? 2 : 1) * stake * 2;
-      html += `<button class="btn-act blue" ${stake < cap && my.money >= raiseCost ? "" : "disabled"} onclick="send({type:'action',action:'raise'})">加注 ${raiseCost}</button>`;
-      // 比牌目标: 按钮直接显示"比牌"文字
-      const targets = state.players.filter(p => p.id !== my.id && p.inRound && !p.folded);
-      if (targets.length) {
-        html += targets.map(t => `<button class="btn-act red" onclick="send({type:'action',action:'compare',target:${t.id}})">比牌·${esc(t.name)}</button>`).join("");
+      if (cs) {
+        // 比牌阶段: 只能 看牌/比牌/过
+        html += cmpBtns + `<button class="btn-act gray" onclick="send({type:'action',action:'pass'})">过</button>`;
+      } else {
+        html += `<button class="btn-act" onclick="send({type:'action',action:'call'})">跟注 ${Math.min(myCost, my.money)}</button>`;
+        const raiseCost = (my.seen ? 2 : 1) * stake * 2;
+        html += `<button class="btn-act blue" ${stake < cap && my.money >= raiseCost ? "" : "disabled"} onclick="send({type:'action',action:'raise'})">加注 ${raiseCost}</button>`;
+        html += cmpBtns;
+        html += `<button class="btn-act gray" onclick="send({type:'action',action:'fold'})">弃牌</button>`;
       }
-      html += `<button class="btn-act gray" onclick="send({type:'action',action:'fold'})">弃牌</button>`;
-      actions.innerHTML = html;
     } else {
-      actions.innerHTML = `<span>底注 <b style="color:#ffd76a">${stake}</b> · 奖池 <b style="color:#ffd76a">${state.pot||0}</b></span><span style="opacity:.7">等待其他玩家行动…(你已下 💵${my.contrib})</span>`;
+      // 不是你的回合也可以随时看牌
+      if (!my.seen) html += `<button class="btn-act blue" onclick="send({type:'action',action:'look'})">👁 看牌</button>`;
+      html += `<span style="opacity:.7">等待其他玩家行动…(你已下 💵${my.contrib})</span>`;
     }
+    actions.innerHTML = html;
     return;
   }
 
