@@ -10,8 +10,9 @@
   body {
     font-family: "Microsoft YaHei", sans-serif;
     background: radial-gradient(ellipse at center, #1e6b3a 0%, #0d3d1f 70%, #062412 100%);
-    position: fixed; inset: 0; width: 100%; height: 100%;
-    overflow: hidden; overscroll-behavior: none; color: #fff;
+    /* 不用 position:fixed —— iOS/Android 旋转屏幕时 fixed body 会白屏不重绘 */
+    position: relative; width: 100%; height: 100%;
+    overflow: hidden; overscroll-behavior: none; touch-action: manipulation; color: #fff;
   }
   button { cursor: pointer; border: none; border-radius: 8px; font-family: inherit; }
   button:disabled { opacity: .45; cursor: not-allowed; }
@@ -1671,6 +1672,18 @@ function toast(t, sticky) {
 
 FX.init();
 connect();
+
+/* 手机旋转/地址栏伸缩时强制重绘, 防止白屏与布局卡死 */
+function forceRepaint() {
+  const b = document.body;
+  b.style.display = "none";
+  void b.offsetHeight;
+  b.style.display = "";
+  if (state) render();
+}
+let _rzT = null;
+addEventListener("orientationchange", () => setTimeout(forceRepaint, 150));
+addEventListener("resize", () => { clearTimeout(_rzT); _rzT = setTimeout(forceRepaint, 250); });
 </script>
 </body>
 </html>
